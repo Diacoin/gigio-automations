@@ -1,0 +1,21 @@
+name: Buongiorno MarcoMan
+
+on:
+  schedule:
+    # Ogni giorno alle 9:00 ora italiana (UTC+2 in estate = 7:00 UTC)
+    - cron: '0 7 * * *'
+  workflow_dispatch: # permette di avviarlo manualmente
+
+jobs:
+  send-buongiorno:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invia messaggio di buongiorno su Telegram
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": ${{ secrets.TELEGRAM_CHAT_ID }},
+              \"parse_mode\": \"Markdown\",
+              \"text\": \"Buongiorno MarcoMan! \u2600\ufe0f\n\nSono Gigio, il tuo supervisore tecnico BitsLegacy.\n\nPriorita' di oggi:\n- Controlla aggiornamenti da Nabil e Hamid\n- Verifica alert tecnici sul progetto\n- Segui i task aperti su BitsLegacy Portal\n\nBuona giornata e buon lavoro! \ud83d\udcaa\n\n\u2014 Gigio\"
+            }"
