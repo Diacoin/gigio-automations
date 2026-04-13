@@ -9,9 +9,6 @@ jobs:
   send-buongiorno:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: Invia buongiorno su Telegram
-        env:
-          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python3 send_buongiorno.py
+        run: |
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage             -H "Content-Type: application/json"             -d "{\"chat_id\":${{ secrets.TELEGRAM_CHAT_ID }},\"text\":\"Buongiorno MarcoMan! Sono Gigio. Buona giornata e buon lavoro! - BitsLegacy\"}"
