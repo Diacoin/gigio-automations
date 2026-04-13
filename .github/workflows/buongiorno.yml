@@ -9,46 +9,9 @@ jobs:
   send-buongiorno:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Invia buongiorno su Telegram
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python3 - <<EOF
-import urllib.request, urllib.parse, json, os
-
-token = os.environ["BOT_TOKEN"]
-chat_id = os.environ["CHAT_ID"]
-
-message = (
-    "Buongiorno MarcoMan! ☀️
-
-"
-    "Sono Gigio, il tuo supervisore tecnico BitsLegacy.
-
-"
-    "Priorita di oggi:
-"
-    "- Controlla aggiornamenti da Nabil e Hamid
-"
-    "- Verifica alert tecnici sul progetto
-"
-    "- Segui i task aperti su BitsLegacy Portal
-
-"
-    "Buona giornata e buon lavoro! 💪
-
-"
-    "— Gigio"
-)
-
-payload = json.dumps({"chat_id": int(chat_id), "text": message}).encode("utf-8")
-req = urllib.request.Request(
-    f"https://api.telegram.org/bot{token}/sendMessage",
-    data=payload,
-    headers={"Content-Type": "application/json"},
-    method="POST"
-)
-with urllib.request.urlopen(req) as resp:
-    print(resp.read().decode())
-EOF
+        run: python3 send_buongiorno.py
