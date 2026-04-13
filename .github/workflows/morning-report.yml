@@ -1,0 +1,40 @@
+name: Report Mattutino — Gigio
+
+on:
+  schedule:
+    # 06:30 UTC = 07:30 ora italiana (CET) / 08:30 CEST (estate)
+    # Nota: in estate (CEST, UTC+2) arriverà alle 08:30. Per mantenerlo a 07:30 tutto l'anno
+    # cambia in '30 5 * * 1-5' nel periodo estivo (fine marzo - fine ottobre)
+    - cron: '30 6 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Modalità debug (logga il report senza inviarlo su Telegram)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  morning-report:
+    name: Genera e invia report mattutino
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Esegui script report mattutino
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DEBUG_MODE: ${{ github.event.inputs.debug || 'false' }}
+        run: node scripts/morning-report.js
