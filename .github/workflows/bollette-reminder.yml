@@ -1,0 +1,29 @@
+name: Promemoria Bollette Sorgenia
+
+on:
+  schedule:
+    - cron: "0 8 2 * *"  # ogni 2° del mese alle 09:00 CET — 3 giorni prima della scadenza minima (5°)
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invia promemoria bollette su Telegram
+        run: |
+          MESE=$(LC_TIME=it_IT.UTF-8 date '+%B %Y' 2>/dev/null || date '+%m/%Y')
+          TESTO="🔔 *Promemoria Bollette Sorgenia* — $MESE
+
+💡 *LUCE* (Via Filippo Airaldi 82, Alassio)
+Verifica la scadenza e paga entro la data indicata in bolletta.
+
+🔥 *GAS* (Via Filippo Airaldi 82, Alassio)
+Verifica la scadenza e paga entro la data indicata in bolletta.
+
+📂 Archivio: https://areaclienti.sorgenia.it/private/home
+
+_Promemoria automatico Gigio_"
+
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":${{ secrets.TELEGRAM_CHAT_ID }},\"text\":\"$TESTO\",\"parse_mode\":\"Markdown\"}"
