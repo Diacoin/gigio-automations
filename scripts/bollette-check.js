@@ -73,30 +73,35 @@ async function getBills(accessToken) {
     { clientCode: CLIENTE, username: USERNAME },
     auth
   );
-  console.log(`retrievePayableBills → ${s1}: ${JSON.stringify(p).slice(0, 300)}`);
-  if (s1 === 200 && (Array.isArray(p) || (p && p.list))) {
-    return Array.isArray(p) ? p : (p.list || []);
+  console.log(`retrievePayableBills → ${s1}: ${JSON.stringify(p).slice(0, 400)}`);
+  if (s1 === 200) {
+    const list = p?.bills || p?.bollette || p?.list || p?.fatture || (Array.isArray(p) ? p : null);
+    if (list && list.length > 0) return list;
   }
 
   // 2. Fallback: dashboard bollette
   const { data: d, status: s2 } = await sorgeniaPost(
     '/bollette/retrieveBillingDashboard',
-    { clientCode: CLIENTE, username: USERNAME },
+    { clientCode: CLIENTE, username: USERNAME, pageNumber: 1 },
     auth
   );
-  console.log(`retrieveBillingDashboard → ${s2}: ${JSON.stringify(d).slice(0, 300)}`);
-  if (s2 === 200) return d?.bills || d?.bollette || d?.list || [];
+  console.log(`retrieveBillingDashboard → ${s2}: ${JSON.stringify(d).slice(0, 400)}`);
+  if (s2 === 200) {
+    const list2 = d?.bills || d?.bollette || d?.list || d?.fatture || (Array.isArray(d) ? d : null);
+    if (list2 && list2.length > 0) return list2;
+  }
 
-  // 3. Fallback: recuperoBollette LUCE
+  // 3. Fallback: recuperoBollette LUCE (formato date MM/yyyy)
   const oggi = new Date();
-  const start = new Date(oggi.getFullYear(), oggi.getMonth() - 1, 1).toISOString().slice(0, 10);
-  const end = new Date(oggi.getFullYear(), oggi.getMonth() + 2, 0).toISOString().slice(0, 10);
+  const mm = (n) => String(n + 1).padStart(2, '0');
+  const start = `${mm(oggi.getMonth() - 1 < 0 ? 11 : oggi.getMonth() - 1)}/${oggi.getMonth() - 1 < 0 ? oggi.getFullYear() - 1 : oggi.getFullYear()}`;
+  const end = `${mm(oggi.getMonth() + 1 > 11 ? 0 : oggi.getMonth() + 1)}/${oggi.getMonth() + 1 > 11 ? oggi.getFullYear() + 1 : oggi.getFullYear()}`;
   const { data: luce, status: s3 } = await sorgeniaPost(
     '/bollette/V4/recuperoBollette',
     { clientCode: CLIENTE, prCode: 'PR7224456', startDate: start, endDate: end },
     auth
   );
-  console.log(`recuperoBollette LUCE → ${s3}: ${JSON.stringify(luce).slice(0, 300)}`);
+  console.log(`recuperoBollette LUCE → ${s3}: ${JSON.stringify(luce).slice(0, 400)}`);
   return luce?.bollette || luce?.list || (Array.isArray(luce) ? luce : []);
 }
 
