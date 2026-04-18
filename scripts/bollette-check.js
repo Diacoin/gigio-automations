@@ -101,8 +101,8 @@ async function getBills(accessToken) {
     { clientCode: CLIENTE, prCode: 'PR7224456', startDate: start, endDate: end },
     auth
   );
-  console.log(`recuperoBollette LUCE → ${s3}: ${JSON.stringify(luce).slice(0, 400)}`);
-  return luce?.bollette || luce?.list || (Array.isArray(luce) ? luce : []);
+  console.log(`recuperoBollette LUCE → ${s3}: ${JSON.stringify(luce).slice(0, 600)}`);
+  return luce?.billsList || luce?.bollette || luce?.list || luce?.fatture || (Array.isArray(luce) ? luce : []);
 }
 
 function formatDate(val) {
@@ -134,13 +134,19 @@ function buildMessage(bills) {
   const lines = [`*Promemoria Bollette Sorgenia* — ${mese}`, ''];
 
   for (const b of bills.slice(0, 6)) {
-    const tipo = String(b.servizio || b.commodity || b.tipo || b.prCode || '').toUpperCase();
-    const isGas = tipo.includes('GAS') || tipo.startsWith('PDR');
+    const tipo = String(b.commodity || b.servizio || b.tipo || b.prCode || '').toUpperCase();
+    const isGas = tipo.includes('GAS') || tipo.startsWith('PDR') || tipo === 'GAS';
     const emoji = isGas ? '\uD83D\uDD25' : '\uD83D\uDCA1';
     const label = isGas ? 'GAS' : 'LUCE';
-    const scadenza = formatDate(b.dataScadenza || b.scadenza || b.dueDate || b.dataPagamento || b.expiryDate);
-    const importo = formatEuro(b.importo || b.amount || b.totalAmount || b.importoTotale);
-    const scadenzaStr = scadenza ? `Scadenza: *${scadenza}*${importo}` : `Importo: *${(b.importo || b.amount || '?')}*`;
+    const scadenza = formatDate(
+      b.dueDate || b.dataScadenza || b.scadenza || b.dataPagamento ||
+      b.expiryDate || b.paymentDueDate || b.paymentExpiryDate
+    );
+    const importo = formatEuro(b.amount || b.importo || b.totalAmount || b.importoTotale);
+    const periodo = b.competenceStartDate ? ` (${b.competenceStartDate})` : '';
+    const scadenzaStr = scadenza
+      ? `Scadenza: *${scadenza}*${importo}`
+      : `Bolletta${periodo}${importo}`;
     lines.push(`${emoji} *${label}* — Via Filippo Airaldi 82, Alassio`);
     lines.push(scadenzaStr);
     lines.push('');
