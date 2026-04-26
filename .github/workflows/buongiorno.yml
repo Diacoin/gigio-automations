@@ -1,4 +1,4 @@
-name: Buongiorno MarcoMan
+﻿name: Buongiorno MarcoMan
 
 on:
   schedule:
@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Invia buongiorno su Telegram
         run: |
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage             -H "Content-Type: application/json"             -d "{\"chat_id\":${{ secrets.TELEGRAM_CHAT_ID }},\"text\":\"Buongiorno MarcoMan! Sono Gigio. Buona giornata e buon lavoro! - BitsLegacy\"}"
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage             -H "Content-Type: application/json"             -d "{\"chat_id\":${{ secrets.TELEGRAM_CHAT_ID }},\"text\":\"Buongiorno MarcoMan! Sono Kirk. Buona giornata e buon lavoro! - BitsLegacy\"}"
