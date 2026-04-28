@@ -3,6 +3,7 @@
  * Express server — Telegram webhook receiver for Kirk bot.
  * Handles incoming messages, applies user whitelist, and routes to Claude.
  * All identifiers and comments in this file are in English.
+ * Security review: Worf — 28/04/2026
  */
 
 'use strict';
@@ -10,6 +11,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { askKirk, clearHistory } = require('./claude');
 const { sendMessage, sendTypingAction, registerWebhook } = require('./telegram');
 
@@ -20,6 +22,7 @@ const REQUIRED_ENV = [
   'TELEGRAM_BOT_TOKEN',
   'ANTHROPIC_API_KEY',
   'TELEGRAM_ALLOWED_USER_ID',
+  'TELEGRAM_WEBHOOK_SECRET',
 ];
 
 for (const key of REQUIRED_ENV) {
@@ -30,6 +33,7 @@ for (const key of REQUIRED_ENV) {
 }
 
 const ALLOWED_USER_ID = parseInt(process.env.TELEGRAM_ALLOWED_USER_ID, 10);
+const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const PORT = process.env.PORT || 3000;
 
 // ---------------------------------------------------------------------------
@@ -37,6 +41,15 @@ const PORT = process.env.PORT || 3000;
 // ---------------------------------------------------------------------------
 const app = express();
 app.use(express.json());
+
+// Rate limiter — protects against flood on webhook endpoint (Worf #7)
+const webhookLimiter = rateLimit({
+  windowMs: 10 * 1000, // 10 seconds
+  max: 30,             // max 30 requests per window (Telegram may retry)
+  standardHeaders: false,
+  legacyHeaders: false,
+  handler: (_req, res) => res.sendStatus(429),
+});
 
 // Health check — Railway uses this to verify the service is alive
 app.get('/health', (_req, res) => {
@@ -46,7 +59,14 @@ app.get('/health', (_req, res) => {
 // ---------------------------------------------------------------------------
 // Main webhook handler
 // ---------------------------------------------------------------------------
-app.post('/webhook', async (req, res) => {
+app.post('/webhook', webhookLimiter, async (req, res) => {
+  // Verify Telegram webhook secret token (Worf #2)
+  const incomingSecret = req.headers['x-telegram-bot-api-secret-token'];
+  if (incomingSecret !== WEBHOOK_SECRET) {
+    console.warn('[server] Webhook secret non valido — richiesta rifiutata.');
+    return res.sendStatus(403);
+  }
+
   // Respond immediately to Telegram (60s timeout — better to respond right away)
   res.sendStatus(200);
 
@@ -59,6 +79,12 @@ app.post('/webhook', async (req, res) => {
   const chatId = String(message.chat.id);
   const userId = message.from?.id;
   const text = message.text.trim();
+
+  // Guard: from may be absent in channel messages (Worf #1)
+  if (typeof userId !== 'number') {
+    console.warn('[server] Messaggio senza from.id valido, scartato.');
+    return;
+  }
 
   // --- Whitelist: only MarcoMan can use the bot ---
   if (userId !== ALLOWED_USER_ID) {
@@ -134,13 +160,9 @@ app.listen(PORT, async () => {
   if (publicUrl) {
     const webhookUrl = `${publicUrl.replace(/\/$/, '')}/webhook`;
     try {
-      await registerWebhook(webhookUrl);
+      await registerWebhook(webhookUrl, WEBHOOK_SECRET);
     } catch (err) {
       console.error('[server] Impossibile registrare webhook:', err?.message ?? err);
-      console.error('[server] Registra manualmente con:');
-      console.error(
-        `[server] curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" -d "url=${webhookUrl}"`
-      );
     }
   } else {
     console.warn('[server] RAILWAY_PUBLIC_URL non impostata — webhook non registrato automaticamente.');

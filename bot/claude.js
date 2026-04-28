@@ -3,6 +3,7 @@
  * Integration module for Anthropic Claude API.
  * Manages conversation history per chat_id and applies Kirk's system prompt.
  * All identifiers and comments in this file are in English.
+ * Security review: Worf — 28/04/2026 (fix #5, #9)
  */
 
 'use strict';
@@ -15,6 +16,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 1024;
 const MAX_HISTORY_TURNS = 20; // max turns (user+assistant pairs) kept in memory
+const MAX_ACTIVE_CHATS = 10;  // max concurrent chat sessions (Worf #5)
 
 // --- In-memory history store ---
 // Structure: Map<chatId: string, messages: Array<{role, content}>>
@@ -24,7 +26,15 @@ const historyStore = new Map();
 // KIRK SYSTEM PROMPT
 // Identity, project context and behavioral rules for the assistant.
 // ---------------------------------------------------------------------------
-const KIRK_SYSTEM_PROMPT = `Sei Kirk, l'assistente AI supervisore diretto di MarcoMan, fondatore di BitsLegacy.
+function buildSystemPrompt() {
+  // Data corrente generata dinamicamente — non hardcodata (Worf #9)
+  const today = new Date().toLocaleDateString('it-IT', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return `Sei Kirk, l'assistente AI supervisore diretto di MarcoMan, fondatore di BitsLegacy.
 
 ## La tua identita'
 Sei l'interfaccia intelligente tra il fondatore e tutto il team tecnico e operativo di BitsLegacy. Non sei un assistente generico: sei un agente specializzato con piena conoscenza del progetto.
@@ -59,17 +69,25 @@ Sei l'interfaccia intelligente tra il fondatore e tutto il team tecnico e operat
 - Non usare emoji.
 
 ## Data corrente
-Oggi e' il 28 aprile 2026.`;
+Oggi e' il ${today}.`;
+}
 
 // ---------------------------------------------------------------------------
 
 /**
  * Retrieves or initializes the conversation history for a given chat ID.
+ * Enforces MAX_ACTIVE_CHATS limit to prevent unbounded memory growth (Worf #5).
  * @param {string} chatId
  * @returns {Array<{role: string, content: string}>}
  */
 function getHistory(chatId) {
   if (!historyStore.has(chatId)) {
+    // Evict oldest chat session if limit reached
+    if (historyStore.size >= MAX_ACTIVE_CHATS) {
+      const oldestKey = historyStore.keys().next().value;
+      historyStore.delete(oldestKey);
+      console.warn(`[claude] Limite chat attive raggiunto. Rimossa sessione: ${oldestKey}`);
+    }
     historyStore.set(chatId, []);
   }
   return historyStore.get(chatId);
@@ -117,7 +135,7 @@ async function askKirk(chatId, userMessage) {
     response = await client.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: KIRK_SYSTEM_PROMPT,
+      system: buildSystemPrompt(),
       messages: messages,
     });
   } catch (error) {

@@ -2,11 +2,20 @@
  * telegram.js
  * Module for sending messages via Telegram Bot API.
  * All identifiers and comments in this file are in English.
+ * Security review: Worf — 28/04/2026 (fix #2, #6)
  */
 
 'use strict';
 
-const BASE_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+/**
+ * Builds the Telegram API URL for a given method.
+ * Token is never stored as a global variable to prevent accidental logging (Worf #6).
+ * @param {string} method - Telegram API method name
+ * @returns {string}
+ */
+function buildApiUrl(method) {
+  return `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`;
+}
 
 /**
  * Sends a text message to a specific Telegram chat.
@@ -15,15 +24,13 @@ const BASE_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`
  * @returns {Promise<void>}
  */
 async function sendMessage(chatId, text) {
-  const url = `${BASE_URL}/sendMessage`;
-
   const body = {
     chat_id: chatId,
     text: text,
     parse_mode: 'Markdown',
   };
 
-  const response = await fetch(url, {
+  const response = await fetch(buildApiUrl('sendMessage'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -41,9 +48,7 @@ async function sendMessage(chatId, text) {
  * @returns {Promise<void>}
  */
 async function sendTypingAction(chatId) {
-  const url = `${BASE_URL}/sendChatAction`;
-
-  await fetch(url, {
+  await fetch(buildApiUrl('sendChatAction'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
@@ -53,18 +58,16 @@ async function sendTypingAction(chatId) {
 }
 
 /**
- * Registers the webhook URL with Telegram.
- * Must be called once at startup with the public Railway URL.
+ * Registers the webhook URL with Telegram, including a secret token for validation (Worf #2).
  * @param {string} webhookUrl - Full HTTPS URL (e.g. https://kirk-bot.up.railway.app/webhook)
+ * @param {string} secretToken - Secret token Telegram will send in X-Telegram-Bot-Api-Secret-Token header
  * @returns {Promise<void>}
  */
-async function registerWebhook(webhookUrl) {
-  const url = `${BASE_URL}/setWebhook`;
-
-  const response = await fetch(url, {
+async function registerWebhook(webhookUrl, secretToken) {
+  const response = await fetch(buildApiUrl('setWebhook'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: webhookUrl }),
+    body: JSON.stringify({ url: webhookUrl, secret_token: secretToken }),
   });
 
   const data = await response.json();
