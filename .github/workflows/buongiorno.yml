@@ -1,8 +1,9 @@
 ﻿name: Buongiorno MarcoMan
 
 on:
-  schedule:
-    - cron: "0 7 * * *"
+  # schedule disattivato su richiesta di MarcoMan
+  # schedule:
+  #   - cron: "0 7 * * *"
   workflow_dispatch:
 
 jobs:
