@@ -1,9 +1,10 @@
-name: Report Mattutino — Gigio
+name: Report Mattutino Gigio
 
 on:
-  schedule:
-    # 06:30 UTC = 07:30 ora italiana (CET) / 08:30 CEST (estate)
-    - cron: '30 6 * * 1-5'
+  # SOSPESO - per riattivare, decommentare le righe schedule qui sotto
+  # schedule:
+  #   # 06:30 UTC = 07:30 ora italiana (CET) / 08:30 CEST (estate)
+  #   - cron: '30 6 * * 1-5'
   workflow_dispatch:
     inputs:
       debug:
@@ -37,3 +38,4 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           DEBUG_MODE: ${{ github.event.inputs.debug || 'false' }}
         run: node scripts/morning-report.js
+
