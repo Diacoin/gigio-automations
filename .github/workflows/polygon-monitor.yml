@@ -37,5 +37,5 @@ jobs:
           WALLET:            ${{ vars.POLYGON_WALLET }}
           TELEGRAM_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_IDS: ${{ secrets.POLYGON_TELEGRAM_CHAT_IDS }}
-          GH_TOKEN:          ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN:          ${{ secrets.GH_PAT }}
         run: python "Polygon Monitor/polygon-monitor.py"
