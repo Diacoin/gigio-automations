@@ -1,0 +1,41 @@
+name: Polygon USDT0 Monitor
+
+# Esegue ogni 5 minuti (intervallo minimo supportato da GitHub Actions)
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:        # esecuzione manuale dalla UI di GitHub
+
+# Previene esecuzioni parallele: se un run è in corso, quello successivo aspetta
+concurrency:
+  group: polygon-monitor
+  cancel-in-progress: false
+
+permissions:
+  actions: write   # necessario per leggere/scrivere le variabili del repository
+
+jobs:
+  monitor:
+    name: Controlla nuove transazioni USDT0
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installa dipendenze
+        run: pip install requests urllib3
+
+      - name: Esegui monitor
+        env:
+          WALLET:            ${{ vars.POLYGON_WALLET }}
+          TELEGRAM_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_IDS: ${{ secrets.POLYGON_TELEGRAM_CHAT_IDS }}
+          GH_TOKEN:          ${{ secrets.GITHUB_TOKEN }}
+        run: python "Polygon Monitor/polygon-monitor.py"
