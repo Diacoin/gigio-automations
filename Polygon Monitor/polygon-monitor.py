@@ -82,7 +82,12 @@ def get_transfers(from_block):
             )
             data = r.json()
         except Exception as e:
-            print(f"[blockscout] errore: {e}")
+            print(f"[blockscout] errore richiesta: {e}")
+            break
+
+        # Difesa: BlockScout a volte restituisce una stringa di errore o rate-limit
+        if not isinstance(data, dict):
+            print(f"[blockscout] risposta inattesa (non dict): {str(data)[:200]}")
             break
 
         stop = False
