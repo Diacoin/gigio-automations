@@ -27,6 +27,7 @@ TG_CHAT_IDS   = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_IDS", "").spli
 GH_TOKEN      = os.environ["GH_TOKEN"]
 GH_REPO       = os.environ.get("GITHUB_REPOSITORY", "Diacoin/gigio-automations")
 MIN_AMOUNT    = 1.0
+ETHERSCAN_KEY = "D9BX98HE38P3RZQVCUU9NAKU1PI8RP53UN"
 
 RPC_NODES = [
     "https://polygon-bor-rpc.publicnode.com",
@@ -34,7 +35,6 @@ RPC_NODES = [
     "https://gateway.tenderly.co/public/polygon",
     "https://rpc.tornadoeth.cash/polygon",
 ]
-BLOCKSCOUT = "https://polygon.blockscout.com/api/v2"
 
 
 # ---------------------------------------------------------------------------
@@ -66,59 +66,58 @@ def usdt0_balance():
 
 
 # ---------------------------------------------------------------------------
-# BlockScout
+# Etherscan API (primaria) — stabile e affidabile
 # ---------------------------------------------------------------------------
 
 def get_transfers(from_block):
     """Restituisce le transazioni in entrata USDT0 successive a from_block."""
+    url = (
+        f"https://api.etherscan.io/v2/api?chainid=137"
+        f"&module=account&action=tokentx"
+        f"&address={WALLET}"
+        f"&contractaddress={USDT0}"
+        f"&startblock={from_block + 1}"
+        f"&endblock=99999999"
+        f"&sort=asc"
+        f"&apikey={ETHERSCAN_KEY}"
+    )
+    try:
+        r    = requests.get(url, timeout=15, verify=False)
+        data = r.json()
+    except Exception as e:
+        print(f"[etherscan] errore richiesta: {e}")
+        return []
+
+    if not isinstance(data, dict):
+        print(f"[etherscan] risposta inattesa: {str(data)[:200]}")
+        return []
+
+    raw = data.get("result", [])
+    if not isinstance(raw, list):
+        print(f"[etherscan] result non è una lista: {str(raw)[:200]}")
+        return []
+
     results = []
-    params  = {"token": USDT0, "filter": "to", "type": "ERC-20"}
-
-    while True:
+    for tx in raw:
+        # Filtra solo le TX in entrata al wallet
+        if tx.get("to", "").lower() != WALLET:
+            continue
         try:
-            r    = requests.get(
-                f"{BLOCKSCOUT}/addresses/{WALLET}/token-transfers",
-                params=params, timeout=15,
-            )
-            data = r.json()
-        except Exception as e:
-            print(f"[blockscout] errore richiesta: {e}")
-            break
+            blk = int(tx.get("blockNumber", 0))
+            ts  = int(tx.get("timeStamp", 0))
+        except Exception:
+            continue
+        results.append({
+            "block":  blk,
+            "ts":     ts,
+            "hash":   tx.get("hash", ""),
+            "from":   tx.get("from", ""),
+            "value":  tx.get("value", "0"),
+            "dec":    tx.get("tokenDecimal", "6"),
+            "symbol": tx.get("tokenSymbol", "USDT0"),
+        })
 
-        # Difesa: BlockScout a volte restituisce una stringa di errore o rate-limit
-        if not isinstance(data, dict):
-            print(f"[blockscout] risposta inattesa (non dict): {str(data)[:200]}")
-            break
-
-        stop = False
-        for item in data.get("items", []):
-            blk = int(item.get("block_number", 0))
-            if blk <= from_block:
-                # Raggiunto un blocco già visto — ferma la paginazione
-                stop = True
-                break
-            try:
-                ts = int(datetime.fromisoformat(
-                    item.get("timestamp", "").replace("Z", "+00:00")).timestamp())
-            except Exception:
-                ts = 0
-            total = item.get("total", {})
-            results.append({
-                "block":  blk,
-                "ts":     ts,
-                "hash":   item.get("transaction_hash", ""),
-                "from":   item.get("from", {}).get("hash", ""),
-                "value":  total.get("value", "0"),
-                "dec":    total.get("decimals", "6"),
-                "symbol": item.get("token", {}).get("symbol", "USDT0"),
-            })
-
-        if stop or not data.get("next_page_params"):
-            break
-        params = {**params, **data["next_page_params"]}
-
-    # Ordina per blocco crescente (dal più vecchio al più recente)
-    results.sort(key=lambda x: x["block"])
+    print(f"[etherscan] trovate {len(results)} TX in entrata dal blocco {from_block + 1}")
     return results
 
 def fmt(value, dec):
