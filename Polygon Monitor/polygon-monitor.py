@@ -27,7 +27,6 @@ TG_CHAT_IDS   = [c.strip() for c in os.environ.get("TELEGRAM_CHAT_IDS", "").spli
 GH_TOKEN      = os.environ["GH_TOKEN"]
 GH_REPO       = os.environ.get("GITHUB_REPOSITORY", "Diacoin/gigio-automations")
 MIN_AMOUNT    = 1.0
-ETHERSCAN_KEY = "D9BX98HE38P3RZQVCUU9NAKU1PI8RP53UN"
 
 RPC_NODES = [
     "https://polygon-bor-rpc.publicnode.com",
@@ -35,6 +34,10 @@ RPC_NODES = [
     "https://gateway.tenderly.co/public/polygon",
     "https://rpc.tornadoeth.cash/polygon",
 ]
+
+# ERC-20 Transfer(address indexed from, address indexed to, uint256 value)
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+LOG_CHUNK      = 2000   # blocchi per richiesta eth_getLogs (limite nodi pubblici)
 
 
 # ---------------------------------------------------------------------------
@@ -66,58 +69,68 @@ def usdt0_balance():
 
 
 # ---------------------------------------------------------------------------
-# Etherscan API (primaria) — stabile e affidabile
+# eth_getLogs — nessuna API key, usa i nodi RPC pubblici
 # ---------------------------------------------------------------------------
 
-def get_transfers(from_block):
-    """Restituisce le transazioni in entrata USDT0 successive a from_block."""
-    url = (
-        f"https://api.etherscan.io/v2/api?chainid=137"
-        f"&module=account&action=tokentx"
-        f"&address={WALLET}"
-        f"&contractaddress={USDT0}"
-        f"&startblock={from_block + 1}"
-        f"&endblock=99999999"
-        f"&sort=asc"
-        f"&apikey={ETHERSCAN_KEY}"
-    )
-    try:
-        r    = requests.get(url, timeout=15, verify=False)
-        data = r.json()
-    except Exception as e:
-        print(f"[etherscan] errore richiesta: {e}")
-        return []
+def get_block_timestamp(block_hex):
+    """Restituisce il timestamp unix di un blocco."""
+    result = rpc("eth_getBlockByNumber", [block_hex, False])
+    if result and isinstance(result, dict):
+        return int(result.get("timestamp", "0x0"), 16)
+    return 0
 
-    if not isinstance(data, dict):
-        print(f"[etherscan] risposta inattesa: {str(data)[:200]}")
-        return []
+def get_transfers(from_block, to_block):
+    """Restituisce le transazioni in entrata USDT0 in [from_block+1, to_block]."""
+    # Wallet address paddato a 32 byte per il topic
+    wallet_topic = "0x" + "0" * 24 + WALLET[2:].lower()
 
-    raw = data.get("result", [])
-    if not isinstance(raw, list):
-        print(f"[etherscan] result non è una lista: {str(raw)[:200]}")
-        return []
+    results   = []
+    block_ts  = {}   # cache timestamp per blocco
 
-    results = []
-    for tx in raw:
-        # Filtra solo le TX in entrata al wallet
-        if tx.get("to", "").lower() != WALLET:
-            continue
-        try:
-            blk = int(tx.get("blockNumber", 0))
-            ts  = int(tx.get("timeStamp", 0))
-        except Exception:
-            continue
-        results.append({
-            "block":  blk,
-            "ts":     ts,
-            "hash":   tx.get("hash", ""),
-            "from":   tx.get("from", ""),
-            "value":  tx.get("value", "0"),
-            "dec":    tx.get("tokenDecimal", "6"),
-            "symbol": tx.get("tokenSymbol", "USDT0"),
-        })
+    # Suddivide in chunk per rispettare i limiti dei nodi pubblici
+    start = from_block + 1
+    while start <= to_block:
+        end = min(start + LOG_CHUNK - 1, to_block)
 
-    print(f"[etherscan] trovate {len(results)} TX in entrata dal blocco {from_block + 1}")
+        logs = rpc("eth_getLogs", [{
+            "address":   USDT0,
+            "fromBlock": hex(start),
+            "toBlock":   hex(end),
+            "topics":    [TRANSFER_TOPIC, None, wallet_topic],
+        }])
+
+        if logs and isinstance(logs, list):
+            for log in logs:
+                try:
+                    blk      = int(log["blockNumber"], 16)
+                    amount   = int(log["data"], 16)
+                    from_raw = log["topics"][1]
+                    from_addr = "0x" + from_raw[-40:]
+                    tx_hash  = log["transactionHash"]
+                except Exception as e:
+                    print(f"[logs] errore parsing log: {e}")
+                    continue
+
+                # Recupera timestamp del blocco (con cache)
+                if blk not in block_ts:
+                    block_ts[blk] = get_block_timestamp(hex(blk))
+
+                results.append({
+                    "block":  blk,
+                    "ts":     block_ts[blk],
+                    "hash":   tx_hash,
+                    "from":   from_addr,
+                    "value":  str(amount),
+                    "dec":    "6",
+                    "symbol": "USDT0",
+                })
+        elif logs is None:
+            print(f"[logs] nessuna risposta dal nodo per blocchi {start}-{end}")
+
+        start = end + 1
+
+    results.sort(key=lambda x: x["block"])
+    print(f"[logs] trovate {len(results)} TX in entrata dal blocco {from_block + 1}")
     return results
 
 def fmt(value, dec):
@@ -220,7 +233,7 @@ def main():
         return
 
     print(f"[check] blocchi {last_block + 1} → {blk}")
-    txs = get_transfers(last_block)
+    txs = get_transfers(last_block, blk)
     print(f"[info] trovate {len(txs)} transazioni da processare")
 
     notified = 0
